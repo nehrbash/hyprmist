@@ -22,9 +22,9 @@ struct Puff {
     double age(double now) const { return std::clamp((now - born) / life, 0.0, 1.0); }
     Vec position(double now) const {
         double t = std::max(0.0, now - born);
-        return origin + velocity * ((1.0 - std::exp(-3.0 * t)) / 3.0)
+        return origin + velocity * (0.25 * t + 0.25 * (1.0 - std::exp(-3.0 * t)))
             + Vec{18 * (std::sin(phase + 3 * t) - std::sin(phase)),
-                  -42 * t - 22 * t * t + 10 * (std::cos(phase + 3 * t) - std::cos(phase))};
+                  -58 * t - 28 * t * t + 10 * (std::cos(phase + 3 * t) - std::cos(phase))};
     }
     Box bounds(double now) const {
         Vec p = position(now);
@@ -52,7 +52,7 @@ class Particles {
         double speed = velocity.length();
         if (speed > 1200) velocity = velocity * (1200 / speed);
         puffs.push_back({at, velocity * 0.20 + Vec{(random() - 0.5) * 45, 0}, now,
-                        0.9 + random() * 0.45, radius * (0.8 + random() * 0.4), opacity,
+                        0.7 + random() * 0.3, radius * (0.8 + random() * 0.4), opacity,
                         unsigned(random() * 4),
                         {stretch.x * (0.8 + random() * 0.5), stretch.y * (0.8 + random() * 0.5)}, random() * 6.283185307});
     }
