@@ -65,7 +65,7 @@ class Particles {
     }
     void trail(Box b, Vec delta, double dt, double now, double opacity, double& credit) {
         double distance = delta.length();
-        if (distance < 0.5 || distance > 500 || dt <= 0) return;
+        if (!std::isfinite(distance) || distance <= 0 || distance > 500 || !std::isfinite(dt) || dt <= 0) return;
         credit += distance / 8;
         unsigned count = std::min(24u, unsigned(credit));
         credit -= std::floor(credit);

@@ -1,5 +1,6 @@
 #include "../Particles.hpp"
 #include <cassert>
+#include <limits>
 int main() {
     Mist::Puff p{{0, 0}, {200, 0}, 0, 1, 50, .5, 0};
     assert(p.position(.5).x > 0 && p.position(.5).y < 0);
@@ -23,8 +24,15 @@ int main() {
     for (int i = 0; i < 60; ++i) slow.trail({0, 0, 100, 100}, {4, 0}, 1.0 / 60, 0, .3, a);
     for (int i = 0; i < 240; ++i) fast.trail({0, 0, 100, 100}, {1, 0}, 1.0 / 240, 0, .3, b);
     assert(slow.puffs.size() == fast.puffs.size());
+    Mist::Particles subpixel;
+    double c = 0;
+    for (int i = 0; i < 960; ++i) subpixel.trail({0, 0, 100, 100}, {.25, 0}, 1.0 / 960, 0, .3, c);
+    assert(subpixel.puffs.size() == slow.puffs.size());
     auto count = s.puffs.size();
     s.trail({100, 200, 400, 300}, {}, .02, .1, .3, credit);
+    assert(s.puffs.size() == count);
+    s.trail({100, 200, 400, 300}, {std::numeric_limits<double>::quiet_NaN(), 0}, .02, .1, .3, credit);
+    s.trail({100, 200, 400, 300}, {20, 0}, std::numeric_limits<double>::infinity(), .1, .3, credit);
     assert(s.puffs.size() == count);
     for (int i = 0; i < 100; ++i) s.burst({0, 0, 800, 600}, 0);
     assert(s.puffs.size() <= Mist::Particles::limit);

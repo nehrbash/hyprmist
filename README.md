@@ -6,12 +6,30 @@ Puffs rise, expand and fade independently after motion stops. Native window and
 workspace animation directions, curves and durations are unchanged.
 
 Targets Hyprland **0.56.2 / efb50993780079460b0cbed1363e2166a2de1d9f**.
+Experimental: a live compositor crash during plugin activation remains unresolved.
+Use the isolated test below while investigating it.
+
 Build with the matching Hyprland headers and C++ runtime:
 
 ```sh
 make
 make check
 ```
+
+The integration test requires Guile with guile-json, Alacritty, and a running
+Wayland session. It starts its own nested compositor with a separate runtime
+directory and disables access to DRM outputs. Logs remain in the printed
+temporary directory. Optional companion plugins load only into that compositor:
+
+```sh
+guile --no-auto-compile tests/nested.scm /absolute/path/to/Hyprland \
+    ./hyprmist.so /absolute/path/to/hyprbars.so
+```
+
+It checks two outputs, a two-tab group, smoke during workspace slides, twenty
+unload/load cycles during animation, configuration reloads, and idle cleanup.
+Set `HYPRMIST_TEST_SHADER_DIR` to a directory containing `mist-open.glsl` and
+`mist-close.glsl` when including HyprWindowShade as a companion.
 
 Load after renderer initialization in `hyprland.lua`:
 
