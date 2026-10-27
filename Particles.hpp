@@ -57,32 +57,34 @@ class Particles {
                         {stretch.x * (0.8 + random() * 0.5), stretch.y * (0.8 + random() * 0.5)}, random() * 6.283185307});
     }
     void burst(Box b, double now) {
-        unsigned count = std::clamp(unsigned((b.w + b.h) / 18), 24u, 90u);
+        unsigned count = std::clamp(unsigned(b.w * b.h / 16000), 24u, 90u);
+        unsigned columns = std::max(1u, unsigned(std::ceil(std::sqrt(count * b.w / std::max(b.h, 1.0)))));
+        unsigned rows = (count + columns - 1) / columns;
+        double radius = std::clamp(std::min(b.w, b.h) * 0.25, 100.0, 210.0);
         for (unsigned i = 0; i < count; ++i) {
-            Vec p{b.x + random() * b.w, b.y + random() * b.h};
-            if (i % 3 != 0) {
-                unsigned side = unsigned(random() * 4);
-                if (side < 2) p.x = b.x + side * b.w;
-                else p.y = b.y + (side - 2) * b.h;
-            }
-            emit(p, {}, now, 90, 0.8);
+            Vec p{b.x + (i % columns + random()) / columns * b.w,
+                  b.y + (i / columns + random()) / rows * b.h};
+            emit(p, {}, now, radius, 0.8);
         }
     }
     void trail(Box b, Vec delta, double dt, double now, double opacity, double& credit, bool cloud = false) {
         double distance = delta.length();
         if (!std::isfinite(distance) || distance <= 0 || distance > 500 || !std::isfinite(dt) || dt <= 0) return;
         bool horizontal = std::abs(delta.x) > std::abs(delta.y);
-        double span = horizontal ? b.h : b.w;
-        credit += distance / 8 * (cloud ? std::max(1.0, span / 180) : 1.0);
+        double coverage = std::sqrt(std::max(0.0, b.w * b.h)) / 160;
+        credit += distance / 8 * (cloud ? std::max(1.0, coverage) : 1.0);
         unsigned count = std::min(24u, unsigned(credit));
         credit -= std::floor(credit);
         for (unsigned i = 0; i < count; ++i) {
             Vec p{b.x + random() * b.w, b.y + random() * b.h};
-            if (horizontal) p.x = b.x + (delta.x > 0 ? 0 : b.w);
-            else p.y = b.y + (delta.y > 0 ? 0 : b.h);
+            if (!cloud) {
+                if (horizontal) p.x = b.x + (delta.x > 0 ? 0 : b.w);
+                else p.y = b.y + (delta.y > 0 ? 0 : b.h);
+            }
             p = p - delta * random();
             Vec stretch = cloud ? (horizontal ? Vec{1.5, 1.0} : Vec{1.0, 1.5}) : Vec{1, 1};
-            emit(p, delta * (1.0 / dt), now, cloud ? 120 : 72, opacity, stretch);
+            double radius = cloud ? std::clamp(std::min(b.w, b.h) * 0.25, 120.0, 210.0) : 72;
+            emit(p, delta * (1.0 / dt), now, radius, opacity, stretch);
         }
     }
     void prune(double now) {

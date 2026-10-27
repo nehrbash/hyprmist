@@ -36,6 +36,15 @@ int main() {
         assert(q.bounds(0).w > q.bounds(0).h);
         assert(q.position(.5).y < q.origin.y);
     }
+    assert(std::any_of(cloud.puffs.begin(), cloud.puffs.end(), [](const auto& q) {
+        return q.origin.x > 200 && q.origin.x < 400 && q.origin.y > 425 && q.origin.y < 875;
+    }));
+    Mist::Particles opening;
+    opening.burst({0, 0, 800, 600}, 0);
+    auto interior = std::count_if(opening.puffs.begin(), opening.puffs.end(), [](const auto& q) {
+        return q.origin.x > 80 && q.origin.x < 720 && q.origin.y > 60 && q.origin.y < 540;
+    });
+    assert(interior > opening.puffs.size() / 2);
     auto count = s.puffs.size();
     s.trail({100, 200, 400, 300}, {}, .02, .1, .3, credit);
     assert(s.puffs.size() == count);

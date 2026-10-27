@@ -30,6 +30,7 @@ It checks two outputs, a two-tab group, smoke during workspace slides, twenty
 unload/load cycles during animation, configuration reloads, and idle cleanup.
 Set `HYPRMIST_TEST_SHADER_DIR` to a directory containing `mist-open.glsl` and
 `mist-close.glsl` when including HyprWindowShade as a companion.
+Set `HYPRMIST_TEST_CAPTURE` to a PNG path to capture the cloud with `grim`.
 
 Load after renderer initialization in `hyprland.lua`:
 
