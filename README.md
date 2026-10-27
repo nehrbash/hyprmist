@@ -1,9 +1,10 @@
 # hyprmist
 
-Smoke that expands beyond Hyprland window borders. Opening and closing windows
-emit clouds; slides and dragging leave trails that follow actual screen movement.
-Puffs rise, expand and fade independently after motion stops. Native window and
-workspace animation directions, curves and durations are unchanged.
+Rolling smoke reveals and dissolves Hyprland windows. A shared turbulence field
+drives both the cloud and the window mask, extending beyond the window borders.
+Workspace clouds follow the native slide direction; opening and closing clouds
+rise. Dragging leaves lighter wisps. Native window and workspace movement stays
+under Hyprland’s control. HyprWindowShade is not required.
 
 Targets Hyprland **0.56.2 / efb50993780079460b0cbed1363e2166a2de1d9f**.
 Experimental: a live compositor crash during plugin activation remains unresolved.
@@ -27,9 +28,8 @@ guile --no-auto-compile tests/nested.scm /absolute/path/to/Hyprland \
 ```
 
 It checks two outputs, a two-tab group, smoke during workspace slides, twenty
-unload/load cycles during animation, configuration reloads, and idle cleanup.
-Set `HYPRMIST_TEST_SHADER_DIR` to a directory containing `mist-open.glsl` and
-`mist-close.glsl` when including HyprWindowShade as a companion.
+unload/load cycles during animation, configuration reloads, idle cleanup, GPU
+mask endpoints, close snapshots, and disabling the effect during a close.
 Set `HYPRMIST_TEST_CAPTURE` to a PNG path to capture the cloud with `grim`.
 
 Load after renderer initialization in `hyprland.lua`:
@@ -47,13 +47,12 @@ hyprctl eval 'hl.plugin.hyprmist.enable(false)'
 hyprctl eval 'hl.plugin.hyprmist.enable(true)'
 ```
 
-The plugin adds textured quads after windows and before top/overlay layers.
-It does not replace window rendering or clip particles to their source window.
-Smoke may overlap neighbouring windows. Fullscreen windows do not emit smoke;
-particles are cleared while the session is locked. At most 600 puffs are alive,
-with drawing and damage tracking limited to their bounds. No emission or frame
-requests continue after they expire.
+The plugin uses native window transformers for reveals and masks Hyprland’s close
+snapshots from an intact copy. Disabling or unloading removes its transformers
+and restores surviving snapshots. It installs no renderer function hooks.
 
-HyprWindowShade can supply the accompanying window dissolve/reveal, but is not
-required. No shader files or generated image assets are needed: four cloud
-textures are generated once, with premultiplied alpha.
+Smoke draws after windows and before top/overlay layers, and can overlap nearby
+windows. Fullscreen windows do not emit smoke; effects clear while the session
+is locked. Fields render at half resolution, capped at 1024 pixels per axis,
+and release when idle. Up to eight close snapshots and 600 drag wisps are kept.
+No shader files or generated image assets are required.

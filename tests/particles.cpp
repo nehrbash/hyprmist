@@ -28,30 +28,13 @@ int main() {
     double c = 0;
     for (int i = 0; i < 960; ++i) subpixel.trail({0, 0, 100, 100}, {.25, 0}, 1.0 / 960, 0, .3, c);
     assert(subpixel.puffs.size() == slow.puffs.size());
-    Mist::Particles cloud;
-    double cloudCredit = 0;
-    cloud.trail({100, 200, 400, 900}, {20, 0}, .02, 0, .65, cloudCredit, true);
-    assert(cloud.puffs.size() > s.puffs.size());
-    for (const auto& q : cloud.puffs) {
-        assert(q.bounds(0).w > q.bounds(0).h);
-        assert(q.position(.5).y < q.origin.y);
-    }
-    assert(std::any_of(cloud.puffs.begin(), cloud.puffs.end(), [](const auto& q) {
-        return q.origin.x > 200 && q.origin.x < 400 && q.origin.y > 425 && q.origin.y < 875;
-    }));
-    Mist::Particles opening;
-    opening.burst({0, 0, 800, 600}, 0);
-    auto interior = std::count_if(opening.puffs.begin(), opening.puffs.end(), [](const auto& q) {
-        return q.origin.x > 80 && q.origin.x < 720 && q.origin.y > 60 && q.origin.y < 540;
-    });
-    assert(interior > opening.puffs.size() / 2);
     auto count = s.puffs.size();
     s.trail({100, 200, 400, 300}, {}, .02, .1, .3, credit);
     assert(s.puffs.size() == count);
     s.trail({100, 200, 400, 300}, {std::numeric_limits<double>::quiet_NaN(), 0}, .02, .1, .3, credit);
     s.trail({100, 200, 400, 300}, {20, 0}, std::numeric_limits<double>::infinity(), .1, .3, credit);
     assert(s.puffs.size() == count);
-    for (int i = 0; i < 100; ++i) s.burst({0, 0, 800, 600}, 0);
+    for (int i = 0; i < 1000; ++i) s.emit({0, 0}, {}, 0, 72, .3);
     assert(s.puffs.size() <= Mist::Particles::limit);
     s.prune(2);
     assert(s.puffs.empty());

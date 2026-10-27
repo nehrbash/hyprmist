@@ -3,7 +3,7 @@ PLUGIN_FLAGS = -shared -fPIC -fno-gnu-unique $(shell pkg-config --cflags hyprlan
 
 all: hyprmist.so
 
-hyprmist.so: main.cpp Particles.hpp
+hyprmist.so: main.cpp Particles.hpp CloudRenderer.hpp
 	$(CXX) $(CXXFLAGS) $(PLUGIN_FLAGS) main.cpp -o $@
 
 check: tests/particles
