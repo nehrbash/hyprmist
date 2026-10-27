@@ -17,15 +17,19 @@ struct Puff {
     Vec origin, velocity;
     double born, life, radius, opacity;
     unsigned texture;
+    Vec stretch{1, 1};
+    double phase = 0;
     double age(double now) const { return std::clamp((now - born) / life, 0.0, 1.0); }
     Vec position(double now) const {
         double t = std::max(0.0, now - born);
-        return origin + velocity * ((1.0 - std::exp(-3.0 * t)) / 3.0) + Vec{0, -42 * t - 22 * t * t};
+        return origin + velocity * ((1.0 - std::exp(-3.0 * t)) / 3.0)
+            + Vec{18 * (std::sin(phase + 3 * t) - std::sin(phase)),
+                  -42 * t - 22 * t * t + 10 * (std::cos(phase + 3 * t) - std::cos(phase))};
     }
     Box bounds(double now) const {
         Vec p = position(now);
         double r = radius * (1.0 + 0.85 * age(now));
-        return {p.x - r, p.y - r, 2 * r, 2 * r};
+        return {p.x - r * stretch.x, p.y - r * stretch.y, 2 * r * stretch.x, 2 * r * stretch.y};
     }
     double alpha(double now) const {
         double t = age(now);
@@ -43,13 +47,14 @@ class Particles {
         state ^= state << 13; state ^= state >> 17; state ^= state << 5;
         return double(state) / 4294967296.0;
     }
-    void emit(Vec at, Vec velocity, double now, double radius, double opacity) {
+    void emit(Vec at, Vec velocity, double now, double radius, double opacity, Vec stretch = {1, 1}) {
         if (puffs.size() >= limit) return;
         double speed = velocity.length();
         if (speed > 1200) velocity = velocity * (1200 / speed);
         puffs.push_back({at, velocity * 0.20 + Vec{(random() - 0.5) * 45, 0}, now,
-                        0.65 + random() * 0.35, radius * (0.8 + random() * 0.4), opacity,
-                        unsigned(random() * 4)});
+                        0.9 + random() * 0.45, radius * (0.8 + random() * 0.4), opacity,
+                        unsigned(random() * 4),
+                        {stretch.x * (0.8 + random() * 0.5), stretch.y * (0.8 + random() * 0.5)}, random() * 6.283185307});
     }
     void burst(Box b, double now) {
         unsigned count = std::clamp(unsigned((b.w + b.h) / 18), 24u, 90u);
@@ -60,21 +65,24 @@ class Particles {
                 if (side < 2) p.x = b.x + side * b.w;
                 else p.y = b.y + (side - 2) * b.h;
             }
-            emit(p, {}, now, 70, 0.42);
+            emit(p, {}, now, 90, 0.8);
         }
     }
-    void trail(Box b, Vec delta, double dt, double now, double opacity, double& credit) {
+    void trail(Box b, Vec delta, double dt, double now, double opacity, double& credit, bool cloud = false) {
         double distance = delta.length();
         if (!std::isfinite(distance) || distance <= 0 || distance > 500 || !std::isfinite(dt) || dt <= 0) return;
-        credit += distance / 8;
+        bool horizontal = std::abs(delta.x) > std::abs(delta.y);
+        double span = horizontal ? b.h : b.w;
+        credit += distance / 8 * (cloud ? std::max(1.0, span / 180) : 1.0);
         unsigned count = std::min(24u, unsigned(credit));
         credit -= std::floor(credit);
         for (unsigned i = 0; i < count; ++i) {
             Vec p{b.x + random() * b.w, b.y + random() * b.h};
-            if (std::abs(delta.x) > std::abs(delta.y)) p.x = b.x + (delta.x > 0 ? 0 : b.w);
+            if (horizontal) p.x = b.x + (delta.x > 0 ? 0 : b.w);
             else p.y = b.y + (delta.y > 0 ? 0 : b.h);
             p = p - delta * random();
-            emit(p, delta * (1.0 / dt), now, 52, opacity);
+            Vec stretch = cloud ? (horizontal ? Vec{1.5, 1.0} : Vec{1.0, 1.5}) : Vec{1, 1};
+            emit(p, delta * (1.0 / dt), now, cloud ? 120 : 72, opacity, stretch);
         }
     }
     void prune(double now) {

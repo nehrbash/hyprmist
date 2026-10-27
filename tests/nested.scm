@@ -101,7 +101,14 @@ end
       (ok "eval" "assert(hl.plugin.hyprmist.particles()>0,'animation emitted no smoke')")
       (ok "plugin" "unload" mist)
       (ok "plugin" "load" mist)
-      (ok "reload"))
+      (ok "reload")
+      (await-ready
+       (lambda ()
+         (catch #t
+           (lambda ()
+             (ok "eval" "assert(hl.plugin.hyprmist.tracked_windows()==2,'waiting for window samples')")
+             #t)
+           (lambda _ #f)))))
     (unless (string-null? (string-trim-both (ctl "configerrors")))
       (error "configuration errors" (ctl "configerrors")))
     (sleep 2)

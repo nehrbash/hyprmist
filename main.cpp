@@ -71,8 +71,11 @@ void ensureTextures() {
                 density += weight * noise(u * frequency + 7, v * frequency + 9, variant + 1);
                 weight *= 0.5f; frequency *= 2;
             }
-            float r = std::hypot(u, v);
-            float edge = std::clamp((1 - r) / 0.45f, 0.0f, 1.0f);
+            float warpX = noise(u * 2 + 13, v * 2 + 3, variant + 19) - 0.5f;
+            float warpY = noise(u * 2 + 5, v * 2 + 17, variant + 31) - 0.5f;
+            float r = std::hypot(u + 0.8f * warpX, v + 0.8f * warpY);
+            float edge = std::clamp((1 - r) / 0.65f, 0.0f, 1.0f);
+            edge *= std::clamp((1 - std::max(std::abs(u), std::abs(v))) / 0.18f, 0.0f, 1.0f);
             edge = edge * edge * (3 - 2 * edge);
             float alpha = edge * std::clamp((density - 0.12f) * 1.5f, 0.0f, 1.0f);
             float shade = 0.22f + density * 0.38f;
@@ -113,7 +116,7 @@ void sampleWindows() {
             if (dt < 0.1 && now > it->second.quietUntil) {
                 Mist::Vec delta{b.x - it->second.box.x, b.y - it->second.box.y};
                 bool workspace = w->m_workspace && w->m_workspace->m_renderOffset->isBeingAnimated();
-                particles.trail(b, delta, dt, now, workspace ? 0.40 : 0.24, it->second.credit);
+                particles.trail(b, delta, dt, now, workspace ? 0.65 : 0.55, it->second.credit, workspace);
             }
         }
         double quiet = it == samples.end() ? 0 : it->second.quietUntil;
@@ -148,6 +151,10 @@ int stats(lua_State* L) {
     lua_pushinteger(L, particles.puffs.size());
     return 1;
 }
+int trackedWindows(lua_State* L) {
+    lua_pushinteger(L, samples.size());
+    return 1;
+}
 }
 APICALL EXPORT std::string PLUGIN_API_VERSION() { return HYPRLAND_API_VERSION; }
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
@@ -178,6 +185,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     listeners.push_back(Event::bus()->m_events.window.destroy.listen([](PHLWINDOWREF w) { samples.erase(w.get()); }));
     HyprlandAPI::addLuaFunction(h, "hyprmist", "enable", setEnabled);
     HyprlandAPI::addLuaFunction(h, "hyprmist", "particles", stats);
+    HyprlandAPI::addLuaFunction(h, "hyprmist", "tracked_windows", trackedWindows);
     return {"hyprmist", "Expanding smoke beyond window borders", "nehrbash", "0.1.0"};
 }
 APICALL EXPORT void PLUGIN_EXIT() {

@@ -28,6 +28,14 @@ int main() {
     double c = 0;
     for (int i = 0; i < 960; ++i) subpixel.trail({0, 0, 100, 100}, {.25, 0}, 1.0 / 960, 0, .3, c);
     assert(subpixel.puffs.size() == slow.puffs.size());
+    Mist::Particles cloud;
+    double cloudCredit = 0;
+    cloud.trail({100, 200, 400, 900}, {20, 0}, .02, 0, .65, cloudCredit, true);
+    assert(cloud.puffs.size() > s.puffs.size());
+    for (const auto& q : cloud.puffs) {
+        assert(q.bounds(0).w > q.bounds(0).h);
+        assert(q.position(.5).y < q.origin.y);
+    }
     auto count = s.puffs.size();
     s.trail({100, 200, 400, 300}, {}, .02, .1, .3, credit);
     assert(s.puffs.size() == count);
