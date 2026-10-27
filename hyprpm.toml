@@ -1,0 +1,9 @@
+[repository]
+name = "hyprmist"
+authors = ["nehrbash"]
+
+[hyprmist]
+description = "Expanding smoke beyond window borders"
+authors = ["nehrbash"]
+output = "hyprmist.so"
+build = ["make"]
