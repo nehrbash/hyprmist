@@ -57,7 +57,7 @@ class VeilTransformer : public Render::IWindowTransformer {
 };
 struct Sample {
     Mist::Box box{};
-    double time=0, opened=-1, credit=0;
+    double time=0, opened=-1, credit=0, cloudStarted=0;
     bool visible=false;
     std::shared_ptr<Mist::Cloud> cloud=std::make_shared<Mist::Cloud>();
     VeilTransformer* transformer=nullptr;
@@ -164,20 +164,19 @@ void sampleWindows() {
         c.active=false;
         c.box=b; c.stamp=now;
         auto workspace=w->m_workspace;
-        if(shown && workspace && workspace->m_renderOffset->isBeingAnimated() && !w->m_pinned) {
-            auto& anim=workspace->m_renderOffset;
-            auto delta=anim->goal()-anim->begun();
-            double length=delta.size();
-            if(length>1) {
-                c.active=true;
-                c.direction={delta.x/length,delta.y/length};
-                c.progress=std::clamp(double(anim->getCurveValue()),0.0,1.0);
-                c.incoming=anim->goal().size()<1;
-                c.elapsed=anim->getPercent()*.8;
-            }
-        } else if(shown && s.opened>=0 && now-s.opened<.48) {
-            c.active=true; c.incoming=true; c.direction={0,-1};
-            c.progress=(now-s.opened)/.48; c.elapsed=now-s.opened;
+        if(shown && workspace && !w->m_pinned &&
+           (workspace->m_alpha->isBeingAnimated() || workspace->m_renderOffset->isBeingAnimated())) {
+            auto& alpha=workspace->m_alpha;
+            bool incoming=alpha->isBeingAnimated() ? alpha->goal()>alpha->begun() : workspace->m_renderOffset->goal().size()<1;
+            if(!wasActive || c.incoming!=incoming) s.cloudStarted=now;
+            c.active=true; c.incoming=incoming;
+            c.progress=alpha->isBeingAnimated() ? (incoming ? alpha->value() : 1.0-alpha->value())
+                                               : workspace->m_renderOffset->getCurveValue();
+            c.progress=std::clamp(c.progress,0.0,1.0);
+            c.elapsed=now-s.cloudStarted;
+        } else if(shown && s.opened>=0 && now-s.opened<.60) {
+            c.active=true; c.incoming=true;
+            c.progress=(now-s.opened)/.60; c.elapsed=now-s.opened;
         } else if(shown && s.visible && !inserted && now-s.time>.001 && now-s.time<.1) {
             particles.trail(b,{b.x-s.box.x,b.y-s.box.y},now-s.time,now,.25,s.credit);
         }
@@ -306,7 +305,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     HyprlandAPI::addLuaFunction(h,"hyprmist","tracked_windows",trackedWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","closing_windows",closingWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","verify_field",verifyField);
-    return {"hyprmist","Coherent window reveals and rolling smoke","nehrbash","0.2.0"};
+    return {"hyprmist","Coherent window reveals and rolling smoke","nehrbash","0.3.0"};
 }
 APICALL EXPORT void PLUGIN_EXIT() {
     listeners.clear();

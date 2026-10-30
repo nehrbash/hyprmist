@@ -2,9 +2,9 @@
 
 Rolling smoke reveals and dissolves Hyprland windows. A shared turbulence field
 drives both the cloud and the window mask, extending beyond the window borders.
-Workspace clouds follow the native slide direction; opening and closing clouds
-rise. Dragging leaves lighter wisps. Native window and workspace movement stays
-under Hyprland’s control. HyprWindowShade is not required.
+Rotating eddies open irregular gaps through the cloud as the window emerges.
+Workspace effects follow native fade or slide timing; dragging leaves lighter
+wisps. HyprWindowShade is not required.
 
 Targets Hyprland **0.56.2 / efb50993780079460b0cbed1363e2166a2de1d9f**.
 Experimental: a live compositor crash during plugin activation remains unresolved.
@@ -27,10 +27,12 @@ guile --no-auto-compile tests/nested.scm /absolute/path/to/Hyprland \
     ./hyprmist.so /absolute/path/to/hyprbars.so
 ```
 
-It checks two outputs, a two-tab group, smoke during workspace slides, twenty
+It checks two outputs, a two-tab group, smoke during workspace fades, twenty
 unload/load cycles during animation, configuration reloads, idle cleanup, GPU
-mask endpoints, close snapshots, and disabling the effect during a close.
-Set `HYPRMIST_TEST_CAPTURE` to a PNG path to capture the cloud with `grim`.
+mask endpoints, spatial reveal, vortex motion, close snapshots, and disabling
+the effect during a close.
+Set `HYPRMIST_TEST_CAPTURE` to a PNG path for seven reveal frames plus workspace,
+idle, and close captures with `grim`.
 
 Load after renderer initialization in `hyprland.lua`:
 
@@ -39,6 +41,11 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("hyprctl plugin load /absolute/path/to/hyprmist.so")
 end)
 ```
+
+For windows to emerge in place, use `popin 100%` for `windowsIn` and
+`windowsOut`, and `fade` for `workspaces` and `specialWorkspace`. Keep animations
+enabled: their fade progress drives the mist. Opening mist lasts 0.6 seconds;
+workspace and close effects follow the compositor's animation duration.
 
 Runtime control:
 
