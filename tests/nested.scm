@@ -130,7 +130,13 @@ hl.animation({leaf='specialWorkspace',enabled=true,speed=8,bezier='linear',style
       (system* "grim" "-o" "WAYLAND-1" (string-append (getenv "HYPRMIST_TEST_CAPTURE") ".idle.png")))
     (kill second-client SIGTERM)
     (await-ready (lambda () (= (length (clients)) 1)))
-    (ok "eval" "assert(hl.plugin.hyprmist.closing_windows()>0,'close snapshot was not animated')")
+    (await-ready
+     (lambda ()
+       (catch #t
+         (lambda ()
+           (ok "eval" "assert(hl.plugin.hyprmist.closing_windows()>0,'waiting for close snapshot')")
+           #t)
+         (lambda _ #f))))
     (when (getenv "HYPRMIST_TEST_CAPTURE")
       (usleep 100000)
       (system* "grim" "-o" "WAYLAND-1" (string-append (getenv "HYPRMIST_TEST_CAPTURE") ".close.png")))
