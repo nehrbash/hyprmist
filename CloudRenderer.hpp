@@ -10,6 +10,7 @@
 namespace Mist {
 struct Cloud {
     Box box{};
+    Vec direction{0, -1};
     double progress = 0, elapsed = 0, seed = 0, stamp = 0;
     bool incoming = true, active = false;
     Box domain{};
@@ -51,7 +52,7 @@ class GLState {
 
 class CloudRenderer {
     GLuint program = 0, vao = 0;
-    enum Uniform { Mode, Source, Field, Size, Domain, FieldDomain, Window, Progress, Elapsed, Seed, Incoming, Count };
+    enum Uniform { Mode, Source, Field, Size, Domain, FieldDomain, Window, Direction, Progress, Elapsed, Seed, Incoming, Count };
     std::array<GLint, Count> uniforms{};
     static GLuint compile(GLenum type, const char* source) {
         GLuint shader = glCreateShader(type);
@@ -79,6 +80,7 @@ class CloudRenderer {
         glUniform1i(uniforms[Source], 0); glUniform1i(uniforms[Field], 1);
         glUniform2f(uniforms[Size], target->m_size.x, target->m_size.y);
         boxUniform(Domain, domain); boxUniform(FieldDomain, cloud.domain); boxUniform(Window, cloud.box);
+        glUniform2f(uniforms[Direction], cloud.direction.x, cloud.direction.y);
         glUniform1f(uniforms[Progress], cloud.progress); glUniform1f(uniforms[Elapsed], cloud.elapsed);
         glUniform1f(uniforms[Seed], cloud.seed); glUniform1i(uniforms[Incoming], cloud.incoming);
         glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, source ? source->m_texID : 0);
@@ -98,7 +100,7 @@ void main() {
 precision highp float;
 uniform int mode, incoming;
 uniform sampler2D sourceTex, fieldTex;
-uniform vec2 targetSize;
+uniform vec2 targetSize, direction;
 uniform vec4 domain, fieldDomain, windowBox;
 uniform float progress, elapsed, seed;
 out vec4 fragColor;
@@ -126,39 +128,27 @@ void main() {
         vec4 field=texture(fieldTex,vec2(fuv.x,1.0-fuv.y));
         if(mode==0) fragColor=texture(sourceTex,uv)*field.r;
         else {
-            vec3 color=mix(vec3(.12,.13,.16),vec3(.62,.64,.68),field.b);
+            vec3 color=mix(vec3(.10,.085,.13),vec3(.48,.44,.53),field.b);
             fragColor=vec4(color*field.g,field.g);
         }
         return;
     }
     vec2 rel=(world-windowBox.xy)/max(windowBox.zw,vec2(1));
-    vec2 centered=rel-.5;
-    vec2 p=centered*windowBox.zw/190.0;
-    float t=elapsed;
-    for(int i=0;i<3;i++) {
-        float fi=float(i);
-        vec2 center=vec2(sin(seed*19.0+fi*2.4),cos(seed*13.0+fi*2.1))*1.25;
-        vec2 offset=p-center;
-        float radius=length(offset);
-        float angle=(1.0+float(i%2)*-2.0)*(t*2.0+.8)*exp(-radius*radius*.18);
-        float cs=cos(angle), sn=sin(angle);
-        p=center+mat2(cs,sn,-sn,cs)*offset;
-    }
-    p+=seed*31.0;
-    vec2 curl=vec2(fbm(p+4.7+t*.16),fbm(p-8.3-t*.12));
-    float density=fbm(p+curl*3.2);
-    float filaments=fbm(p*2.2+curl*2.0);
-    float radius=length(centered*vec2(1.35,1.15));
-    float q=radius*.65+density*.60+filaments*.12;
-    float front=mix(-.20,1.55,smoothstep(.08,.94,progress));
-    float reveal=smoothstep(q-.09,q+.09,front);
+    float along=dot(rel-.5,direction)/max(dot(abs(direction),vec2(1)),.01)+.5;
+    float front=mix(-.35,1.35,progress);
+    vec2 p=(rel-.5)*windowBox.zw/150.0 + seed*31.0;
+    p-=direction*elapsed*1.6;
+    p.y+=elapsed*1.1;
+    vec2 curl=vec2(fbm(p+4.7),fbm(p-8.3));
+    float density=fbm(p+curl*2.8);
+    float q=along+(density-.5)*.30;
+    float reveal=smoothstep(q-.10,q+.10,front);
     float mask=incoming!=0 ? reveal : 1.0-reveal;
-    vec2 outside=max(abs(centered*windowBox.zw)-windowBox.zw*.5,vec2(0));
-    float edge=1.0-smoothstep(10.0,150.0,length(outside));
-    float band=exp(-pow((q-front)/.24,2.0));
-    float envelope=smoothstep(0.0,.12,progress)*(1.0-smoothstep(.72,1.0,progress));
-    float billow=smoothstep(.20,.72,density+filaments*.22);
-    float smoke=clamp(edge*envelope*(band*.85+.22)*(billow*.8+.15),0.0,.88);
+    vec2 outside=max(abs((rel-.5)*windowBox.zw)-windowBox.zw*.5,vec2(0));
+    float edge=1.0-smoothstep(25.0,150.0,length(outside));
+    float band=exp(-pow((q-front)/.22,2.0));
+    float envelope=pow(max(0.0,sin(progress*3.14159265)),.45);
+    float smoke=clamp(band*edge*envelope*(.45+density*.9),0.0,.92);
     fragColor=vec4(mask,smoke,density,1);
 })GLSL";
         GLuint vs = compile(GL_VERTEX_SHADER, vertex), fs = compile(GL_FRAGMENT_SHADER, fragment);
@@ -166,7 +156,7 @@ void main() {
         glDeleteShader(vs); glDeleteShader(fs);
         GLint ok = 0; glGetProgramiv(program, GL_LINK_STATUS, &ok);
         if (!ok) { release(); throw std::runtime_error("hyprmist shader link failed"); }
-        constexpr const char* names[]{"mode","sourceTex","fieldTex","targetSize","domain","fieldDomain","windowBox","progress","elapsed","seed","incoming"};
+        constexpr const char* names[]{"mode","sourceTex","fieldTex","targetSize","domain","fieldDomain","windowBox","direction","progress","elapsed","seed","incoming"};
         for (size_t i=0;i<Count;++i) uniforms[i]=glGetUniformLocation(program,names[i]);
         glGenVertexArrays(1,&vao);
     }
@@ -192,32 +182,21 @@ void main() {
         GLState saved;
         Cloud c;
         c.box={0,0,640,480};
-        auto sample=[&](double progress, bool incoming, double elapsed=0.2) {
-            c.progress=progress; c.incoming=incoming; c.elapsed=elapsed; c.stamp+=1;
+        c.direction={1,0};
+        auto sample=[&](double progress, bool incoming) {
+            c.progress=progress; c.incoming=incoming; c.stamp+=1;
             prepare(c); c.field->bind();
             GLint framebuffer = 0;
             glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
-            std::vector<uint8_t> pixels(9*7*4);
-            for(int y=0;y<7;y++) for(int x=0;x<9;x++) {
-                int px=(160+40+x*70)*c.field->m_size.x/c.domain.w;
-                int py=(160+30+y*70)*c.field->m_size.y/c.domain.h;
-                glReadPixels(px,py,1,1,GL_RGBA,GL_UNSIGNED_BYTE,&pixels[(y*9+x)*4]);
-            }
-            return pixels;
+            std::array<uint8_t,4> pixel{};
+            glReadPixels(c.field->m_size.x/2,c.field->m_size.y/2,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel.data());
+            return pixel;
         };
         auto start=sample(0,true), end=sample(1,true), middle=sample(.5,true);
-        auto moved=sample(.5,true,.45), dissolve=sample(.5,false);
         auto closingStart=sample(0,false), closingEnd=sample(1,false);
-        int lowest=255, highest=0, smoke=0, moving=0;
-        for(size_t i=0;i<start.size();i+=4) {
-            if(start[i]!=0 || end[i]!=255 || start[i+1]!=0 || end[i+1]!=0 ||
-               closingStart[i]!=255 || closingEnd[i]!=0 || std::abs(int(middle[i])+int(dissolve[i])-255)>1) return false;
-            lowest=std::min(lowest,int(middle[i])); highest=std::max(highest,int(middle[i]));
-            smoke=std::max(smoke,int(middle[i+1]));
-            moving+=std::abs(int(middle[i+2])-int(moved[i+2]));
-        }
-        return highest-lowest>100 && smoke>40 && moving>100;
+        return start[0]==0 && end[0]==255 && start[1]==0 && end[1]==0 && middle[1]>80
+            && closingStart[0]==255 && closingEnd[0]==0;
     }
 };
 }
