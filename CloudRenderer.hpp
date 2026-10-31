@@ -6,6 +6,7 @@
 #include <array>
 #include <stdexcept>
 #include "Particles.hpp"
+#include "Palette.hpp"
 
 namespace Mist {
 struct Cloud {
@@ -52,7 +53,7 @@ class GLState {
 
 class CloudRenderer {
     GLuint program = 0, vao = 0;
-    enum Uniform { Mode, Source, Field, Size, Domain, FieldDomain, Window, Direction, Progress, Elapsed, Seed, Incoming, Count };
+    enum Uniform { Mode, Source, Field, Size, Domain, FieldDomain, Window, Direction, Progress, Elapsed, Seed, Incoming, Shadow, Light, AccentA, AccentB, AccentC, Count };
     std::array<GLint, Count> uniforms{};
     static GLuint compile(GLenum type, const char* source) {
         GLuint shader = glCreateShader(type);
@@ -83,12 +84,16 @@ class CloudRenderer {
         glUniform2f(uniforms[Direction], cloud.direction.x, cloud.direction.y);
         glUniform1f(uniforms[Progress], cloud.progress); glUniform1f(uniforms[Elapsed], cloud.elapsed);
         glUniform1f(uniforms[Seed], cloud.seed); glUniform1i(uniforms[Incoming], cloud.incoming);
+        for (size_t i = 0; i < palette.size(); ++i)
+            glUniform3fv(uniforms[Shadow + i], 1, palette[i].data());
         glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, source ? source->m_texID : 0);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, mode != 1 && cloud.field ? cloud.field->getTexture()->m_texID : 0);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
   public:
+    static constexpr double padding = 320;
+    Palette::Colors palette = Palette::defaults;
     void init() {
         GLState saved;
         const char* vertex = R"GLSL(#version 320 es
@@ -103,71 +108,39 @@ uniform sampler2D sourceTex, fieldTex;
 uniform vec2 targetSize, direction;
 uniform vec4 domain, fieldDomain, windowBox;
 uniform float progress, elapsed, seed;
+uniform vec3 shadowColor, lightColor, accentA, accentB, accentC;
 out vec4 fragColor;
-float hash(vec2 p) {
-    vec3 q = fract(vec3(p.xyx) * .1031);
-    q += dot(q, q.yzx + 33.33);
-    return fract((q.x + q.y) * q.z);
-}
-float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.0),f.x),f.y);
-}
-float fbm(vec2 p) {
-    float n=0.0, a=.55;
-    for(int i=0;i<4;i++) { n+=a*noise(p); p=mat2(1.6,1.2,-1.2,1.6)*p+3.7; a*=.48; }
-    return n;
-}
+)GLSL"
+#include "VolumeShader.inc"
+R"GLSL(
 void main() {
-    vec2 uv=gl_FragCoord.xy/targetSize;
-    if(mode==3) { fragColor=texture(sourceTex,uv); return; }
-    vec2 world=domain.xy+vec2(uv.x,1.0-uv.y)*domain.zw;
-    if(mode!=1) {
-        vec2 fuv=(world-fieldDomain.xy)/fieldDomain.zw;
-        vec4 field=texture(fieldTex,vec2(fuv.x,1.0-fuv.y));
-        if(mode==0) fragColor=texture(sourceTex,uv)*field.r;
-        else {
-            vec3 color=mix(vec3(.10,.085,.13),vec3(.48,.44,.53),field.b);
-            fragColor=vec4(color*field.g,field.g);
-        }
-        return;
-    }
-    vec2 rel=(world-windowBox.xy)/max(windowBox.zw,vec2(1));
-    float along=dot(rel-.5,direction)/max(dot(abs(direction),vec2(1)),.01)+.5;
-    float front=mix(-.35,1.35,progress);
-    vec2 p=(rel-.5)*windowBox.zw/150.0 + seed*31.0;
-    p-=direction*elapsed*1.6;
-    p.y+=elapsed*1.1;
-    vec2 curl=vec2(fbm(p+4.7),fbm(p-8.3));
-    float density=fbm(p+curl*2.8);
-    float q=along+(density-.5)*.30;
-    float reveal=smoothstep(q-.10,q+.10,front);
-    float mask=incoming!=0 ? reveal : 1.0-reveal;
-    vec2 outside=max(abs((rel-.5)*windowBox.zw)-windowBox.zw*.5,vec2(0));
-    float edge=1.0-smoothstep(25.0,150.0,length(outside));
-    float band=exp(-pow((q-front)/.22,2.0));
-    float envelope=pow(max(0.0,sin(progress*3.14159265)),.45);
-    float smoke=clamp(band*edge*envelope*(.45+density*.9),0.0,.92);
-    fragColor=vec4(mask,smoke,density,1);
-})GLSL";
+    vec2 uv = gl_FragCoord.xy / targetSize;
+    if (mode == 5) { fragColor = vec4(0.0); return; }
+    if (mode == 3) { fragColor = texture(sourceTex, uv); return; }
+    vec2 world = domain.xy + vec2(uv.x, 1.0 - uv.y) * domain.zw;
+    if (mode == 1) { fragColor = renderSmoke(world, windowBox); return; }
+    float visibility = windowVisibility(world, windowBox);
+    if (mode == 4) { fragColor = vec4(visibility, visibility, visibility, 1.0); return; }
+    fragColor = texture(sourceTex, uv) * visibility;
+}
+)GLSL";
         GLuint vs = compile(GL_VERTEX_SHADER, vertex), fs = compile(GL_FRAGMENT_SHADER, fragment);
         program = glCreateProgram(); glAttachShader(program, vs); glAttachShader(program, fs); glLinkProgram(program);
         glDeleteShader(vs); glDeleteShader(fs);
         GLint ok = 0; glGetProgramiv(program, GL_LINK_STATUS, &ok);
         if (!ok) { release(); throw std::runtime_error("hyprmist shader link failed"); }
-        constexpr const char* names[]{"mode","sourceTex","fieldTex","targetSize","domain","fieldDomain","windowBox","direction","progress","elapsed","seed","incoming"};
+        constexpr const char* names[]{"mode","sourceTex","fieldTex","targetSize","domain","fieldDomain","windowBox","direction","progress","elapsed","seed","incoming","shadowColor","lightColor","accentA","accentB","accentC"};
         for (size_t i=0;i<Count;++i) uniforms[i]=glGetUniformLocation(program,names[i]);
         glGenVertexArrays(1,&vao);
     }
     void release() { if(program) glDeleteProgram(program); if(vao) glDeleteVertexArrays(1,&vao); program=vao=0; }
     void prepare(Cloud& c) {
         if (c.prepared == c.stamp) return;
-        c.domain = {c.box.x-160,c.box.y-160,c.box.w+320,c.box.h+320};
-        double scale=std::min(.5,1024.0/std::max(c.domain.w,c.domain.h));
+        c.domain = {c.box.x-padding,c.box.y-padding,c.box.w+2*padding,c.box.h+2*padding};
+        double scale=std::min({.5,1024.0/std::max(c.domain.w,c.domain.h),std::sqrt(350000.0/(c.domain.w*c.domain.h))});
         Vector2D size{std::ceil(c.domain.w*scale),std::ceil(c.domain.h*scale)};
         draw(1,nullptr,c.field,size,c.domain,c);
-        draw(2,nullptr,c.smoke,size,c.domain,c);
+        c.smoke=c.field;
         c.prepared=c.stamp;
     }
     SP<Render::IFramebuffer> mask(SP<Render::IFramebuffer> input, SP<Render::IFramebuffer>& output, Box domain, Cloud& c) {
@@ -178,11 +151,15 @@ void main() {
     void copy(SP<Render::IFramebuffer> input, SP<Render::IFramebuffer>& output) {
         draw(3,input->getTexture(),output,input->m_size,{},{});
     }
+    void blank(SP<Render::IFramebuffer>& target) {
+        draw(5,nullptr,target,target->m_size,{},{});
+    }
     bool verifyField() {
         GLState saved;
         Cloud c;
         c.box={0,0,640,480};
         c.direction={1,0};
+        SP<Render::IFramebuffer> maskTest;
         auto sample=[&](double progress, bool incoming) {
             c.progress=progress; c.incoming=incoming; c.stamp+=1;
             prepare(c); c.field->bind();
@@ -191,6 +168,13 @@ void main() {
             glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
             std::array<uint8_t,4> pixel{};
             glReadPixels(c.field->m_size.x/2,c.field->m_size.y/2,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel.data());
+            auto smokeAlpha = pixel[3];
+            draw(4,nullptr,maskTest,c.field->m_size,c.domain,c);
+            maskTest->bind();
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
+            glReadPixels(maskTest->m_size.x/2,maskTest->m_size.y/2,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel.data());
+            pixel[1] = smokeAlpha;
             return pixel;
         };
         auto start=sample(0,true), end=sample(1,true), middle=sample(.5,true);

@@ -1,0 +1,9 @@
+{
+    "colors": {
+        "shadow": "surfaceContainerHighest",
+        "light": "onSurface",
+        "primary": "primary",
+        "secondary": "secondary",
+        "tertiary": "tertiary"
+    }
+}

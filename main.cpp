@@ -20,6 +20,7 @@
 namespace {
 Mist::Particles particles;
 Mist::CloudRenderer clouds;
+Mist::Palette palette;
 std::vector<CHyprSignalListener> listeners;
 std::array<SP<Render::ITexture>, 4> textures;
 bool enabled = true;
@@ -41,7 +42,7 @@ bool visible(PHLWINDOW w) {
         && g_pHyprRenderer->shouldRenderWindow(w);
 }
 void damageCloud(const Mist::Cloud& c) {
-    auto b=box(c.box); b.expand(165); g_pHyprRenderer->damageBox(b);
+    auto b=box(c.box); b.expand(Mist::CloudRenderer::padding+5); g_pHyprRenderer->damageBox(b);
 }
 class VeilTransformer : public Render::IWindowTransformer {
     std::shared_ptr<Mist::Cloud> cloud;
@@ -68,6 +69,7 @@ std::vector<PendingClose> pending;
 struct Closing {
     WP<Desktop::IFadeout> fadeout;
     SP<Render::IFramebuffer> original;
+    SP<Render::IFramebuffer> masked;
     Mist::Cloud cloud;
     double born;
     float initialAlpha;
@@ -152,6 +154,7 @@ void tick() {
 void sampleWindows() {
     if(!enabled || g_pSessionLockManager->isSessionLocked()) return;
     double now=seconds();
+    palette.refresh(now); clouds.palette=palette.colors;
     for(auto& w:Desktop::windowState()->windows()) {
         if(!w || !w->m_isMapped) continue;
         auto [it,inserted]=samples.try_emplace(w.get());
@@ -159,25 +162,22 @@ void sampleWindows() {
         auto b=windowBox(w);
         bool shown=visible(w);
         auto& c=*s.cloud;
-        if(inserted) c.seed=particles.random();
+        if(inserted) c.seed=1+std::floor(particles.random()*1000000);
         bool wasActive=c.active;
         c.active=false;
         c.box=b; c.stamp=now;
         auto workspace=w->m_workspace;
-        if(shown && workspace && workspace->m_renderOffset->isBeingAnimated() && !w->m_pinned) {
-            auto& anim=workspace->m_renderOffset;
-            auto delta=anim->goal()-anim->begun();
-            double length=delta.size();
-            if(length>1) {
-                c.active=true;
-                c.direction={delta.x/length,delta.y/length};
-                c.progress=std::clamp(double(anim->getCurveValue()),0.0,1.0);
-                c.incoming=anim->goal().size()<1;
-                c.elapsed=anim->getPercent()*.8;
-            }
-        } else if(shown && s.opened>=0 && now-s.opened<.48) {
-            c.active=true; c.incoming=true; c.direction={0,-1};
-            c.progress=(now-s.opened)/.48; c.elapsed=now-s.opened;
+        if(shown && workspace && !w->m_pinned &&
+           (workspace->m_alpha->isBeingAnimated() || workspace->m_renderOffset->isBeingAnimated())) {
+            auto& alpha=workspace->m_alpha;
+            c.incoming=alpha->isBeingAnimated() ? alpha->goal()>alpha->begun() : workspace->m_renderOffset->goal().size()<1;
+            c.active=true;
+            c.progress=alpha->isBeingAnimated() ? (c.incoming ? alpha->value() : 1.0-alpha->value())
+                                               : workspace->m_renderOffset->getCurveValue();
+            c.progress=std::clamp(c.progress,0.0,1.0);
+        } else if(shown && s.opened>=0 && now-s.opened<.9) {
+            c.active=true; c.incoming=true;
+            c.progress=(now-s.opened)/.9; c.elapsed=now-s.opened;
         } else if(shown && s.visible && !inserted && now-s.time>.001 && now-s.time<.1) {
             particles.trail(b,{b.x-s.box.x,b.y-s.box.y},now-s.time,now,.25,s.credit);
         }
@@ -215,7 +215,9 @@ void updateClosing() {
         c.cloud.progress=std::clamp(1.0-double(f->alpha()/c.initialAlpha),0.0,1.0);
         c.cloud.elapsed=now-c.born; c.cloud.stamp=now;
         auto target=f->framebuffer();
-        clouds.mask(c.original,target,monitorBox(m),c.cloud);
+        clouds.mask(c.original,c.masked,monitorBox(m),c.cloud);
+        // Native fade alpha would expose the disappearing window before smoke covers it.
+        clouds.blank(target);
     }
 }
 void addCloud(Mist::Cloud& c, PHLMONITOR monitor, Desktop::IFadeout* fadeout=nullptr) {
@@ -241,14 +243,21 @@ void render() {
     updateClosing();
     for(auto& [w,s]:samples) {
         if(!s.cloud->active) continue;
-        CBox bounds=box(s.cloud->box); bounds.expand(165);
+        CBox bounds=box(s.cloud->box); bounds.expand(Mist::CloudRenderer::padding+5);
         if(bounds.x+bounds.w<monitor->m_position.x || bounds.y+bounds.h<monitor->m_position.y ||
            bounds.x>monitor->m_position.x+monitor->m_size.x || bounds.y>monitor->m_position.y+monitor->m_size.y) continue;
         addCloud(*s.cloud,monitor);
     }
     for(auto& [key,c]:closing) {
         auto f=c.fadeout.lock();
-        if(f && f->monitor()==monitor) addCloud(c.cloud,monitor,f.get());
+        if(f && f->monitor()==monitor) {
+            if(c.masked) {
+                CTexPassElement::SRenderData data;
+                data.tex=c.masked->getTexture(); data.box=f->renderBox(); data.flipEndFrame=true;
+                g_pHyprRenderer->m_renderPass.add(makeUnique<PuffElement>(std::move(data)));
+            }
+            addCloud(c.cloud,monitor,f.get());
+        }
     }
     if(particles.puffs.empty()) return;
     ensureTextures();
@@ -283,13 +292,14 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() { return HYPRLAND_API_VERSION; }
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     if(HyprlandAPI::getHyprlandVersion(h).hash!="efb50993780079460b0cbed1363e2166a2de1d9f")
         throw std::runtime_error("hyprmist requires Hyprland 0.56.2 (efb50993)");
+    palette.refresh(seconds(),true); clouds.palette=palette.colors;
     g_pHyprRenderer->glBackend()->makeEGLCurrent(); clouds.init();
     listeners.push_back(Event::bus()->m_events.render.preChecks.listen([](PHLMONITOR) {tick();}));
     listeners.push_back(Event::bus()->m_events.render.pre.listen([](PHLMONITOR) {sampleWindows();}));
     listeners.push_back(Event::bus()->m_events.render.stage.listen([](eRenderStage stage) {if(stage==RENDER_POST_WINDOWS) render();}));
     listeners.push_back(Event::bus()->m_events.window.openLate.listen([](PHLWINDOW w) {
         if(!enabled) return;
-        auto& s=samples[w.get()]; s.opened=seconds(); s.cloud->seed=particles.random();
+        auto& s=samples[w.get()]; s.opened=seconds(); s.cloud->seed=1+std::floor(particles.random()*1000000);
     }));
     listeners.push_back(Event::bus()->m_events.window.close.listen([](PHLWINDOW w) {
         auto it=samples.find(w.get());
@@ -306,7 +316,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     HyprlandAPI::addLuaFunction(h,"hyprmist","tracked_windows",trackedWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","closing_windows",closingWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","verify_field",verifyField);
-    return {"hyprmist","Coherent window reveals and rolling smoke","nehrbash","0.2.0"};
+    return {"hyprmist","Volumetric mist with theme-lit billows","nehrbash","0.4.0"};
 }
 APICALL EXPORT void PLUGIN_EXIT() {
     listeners.clear();

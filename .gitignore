@@ -1,2 +1,5 @@
 *.so
 /tests/particles
+/tests/palette
+/VolumeShader.inc
+/preview/*.qsb
