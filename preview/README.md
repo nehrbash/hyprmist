@@ -4,17 +4,18 @@ Run `quickshell -p preview/shell.qml` from the Hyprmist checkout.
 The preview starts paused. Reveal creates a new seeded arrangement; Conceal
 reuses it. New arrangement changes the layout without playing. Wide, Tall,
 Compact, and Large exercise fitting. Large simulates a window at twice the
-preview scale. Slow motion stretches 0.5 seconds to 1.5 seconds.
+preview scale. Slow motion stretches 0.9 seconds to 2.7 seconds.
 
-`../shaders/volume.glsl` ray-marches a 3D density field made from eight separated
+`../shaders/volume.glsl` ray-marches a 3D density field made from twelve overlapping
 billows with fractal surfaces. Each volume drifts, expands, and loses density on a separate seeded schedule.
-Fixed-size pockets and area-dependent opacity keep larger windows quieter.
+The coherent cloud form renders at 60% opacity. A backing layer clears locally
+after the visibility transition, leaving drifting pockets.
 Light comes from the upper left; samples toward the light account for intervening smoke.
 This is procedural volume rendering, not a fluid solver.
 
 The smoke renders to a reduced-resolution texture. `composite.frag`
 composites it over the full-resolution window, keeping text sharp. The window
-fades steadily beneath the cloud pockets and stays stationary.
+stays stationary while its visibility follows the cloud arrival field.
 
 Colors follow `$XDG_STATE_HOME/burl/scheme.json`, falling back to
 `~/.local/state/burl/scheme.json`, and update when the theme changes.

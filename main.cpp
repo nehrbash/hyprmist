@@ -175,9 +175,9 @@ void sampleWindows() {
             c.progress=alpha->isBeingAnimated() ? (c.incoming ? alpha->value() : 1.0-alpha->value())
                                                : workspace->m_renderOffset->getCurveValue();
             c.progress=std::clamp(c.progress,0.0,1.0);
-        } else if(shown && s.opened>=0 && now-s.opened<.5) {
+        } else if(shown && s.opened>=0 && now-s.opened<.9) {
             c.active=true; c.incoming=true;
-            c.progress=(now-s.opened)/.5; c.elapsed=now-s.opened;
+            c.progress=(now-s.opened)/.9; c.elapsed=now-s.opened;
         } else if(shown && s.visible && !inserted && now-s.time>.001 && now-s.time<.1) {
             particles.trail(b,{b.x-s.box.x,b.y-s.box.y},now-s.time,now,.25,s.credit);
         }
@@ -316,7 +316,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     HyprlandAPI::addLuaFunction(h,"hyprmist","tracked_windows",trackedWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","closing_windows",closingWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","verify_field",verifyField);
-    return {"hyprmist","Volumetric mist with theme-lit billows","nehrbash","0.4.1"};
+    return {"hyprmist","Volumetric mist with theme-lit billows","nehrbash","0.4.2"};
 }
 APICALL EXPORT void PLUGIN_EXIT() {
     listeners.clear();

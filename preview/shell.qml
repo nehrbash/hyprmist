@@ -174,7 +174,7 @@ ShellRoot {
                     property: "progress"
                     from: 0
                     to: 1
-                    duration: slow.checked ? 1500 : 500
+                    duration: slow.checked ? 2700 : 900
                     onStopped: window.measureFrames = false
                 }
                 Component.onCompleted: { randomize(); console.log("MIST-PREVIEW-READY"); }

@@ -92,7 +92,7 @@ class CloudRenderer {
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
   public:
-    static constexpr double padding = 160;
+    static constexpr double padding = 320;
     Palette::Colors palette = Palette::defaults;
     void init() {
         GLState saved;
