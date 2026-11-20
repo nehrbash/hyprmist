@@ -20,27 +20,27 @@ float fbm(vec3 p) {
     }
     return n;
 }
-vec3 centers[12];
-vec3 inverseScales[12];
-float billowMass[12];
+vec3 centers[8];
+vec3 inverseScales[8];
+float billowMass[8];
 void prepareBillows(vec3 extent, vec3 offset, float t) {
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < 8; ++i) {
         float id = float(i);
         float h = hash(offset + id * 3.7);
         float j = hash(offset + id * 8.9 + 17.0);
         float angle = id * 2.399963;
-        float radius = sqrt((id + 0.5) / 12.0);
+        float radius = sqrt((id + 0.5) / 8.0);
         vec3 center = vec3(cos(angle) * extent.x * radius,
                            sin(angle) * extent.y * radius,
                            (h - 0.5) * 0.9);
-        center.xy += vec2(sin(t * 0.8 + h * 6.28), cos(t * 0.65 + j * 6.28)) * 0.20;
+        center.xy += vec2(sin(t * 0.8 + h * 6.28), cos(t * 0.65 + j * 6.28)) * 0.07;
         float release = smoothstep(0.40 + h * 0.18, 0.92 + j * 0.08, progress);
-        center.xy += vec2(cos(j * 6.28), sin(j * 6.28)) * release * (0.45 + h * 0.65);
+        center.xy += vec2(cos(j * 6.28), sin(j * 6.28)) * release * (0.14 + h * 0.20);
         vec3 scale = vec3(0.78 + h * 0.42, 0.65 + j * 0.38, 0.60 + h * 0.3);
-        scale *= 1.0 + release * 0.26;
+        scale *= 1.0 + release * 0.12;
         centers[i] = center;
         inverseScales[i] = 1.0 / scale;
-        billowMass[i] = 1.0 - smoothstep(0.52 + h * 0.16, 0.80 + j * 0.18, progress);
+        billowMass[i] = 1.0 - smoothstep(0.45 + h * 0.10, 0.74 + j * 0.14, progress);
     }
 }
 float densityAt(vec3 p, vec3 extent, vec3 offset, float t) {
@@ -48,25 +48,20 @@ float densityAt(vec3 p, vec3 extent, vec3 offset, float t) {
     float billow = fbm(p * 3.1 + offset + flow);
     float surfaceDetail = (billow - 0.52) * 1.15;
     float density = 0.0;
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < 8; ++i) {
         float sphere = 1.0 - length((p - centers[i]) * inverseScales[i]);
         float lobe = smoothstep(-0.08, 0.18, sphere + surfaceDetail) * billowMass[i];
         density = 1.0 - (1.0 - density) * (1.0 - lobe);
     }
-    vec3 back = abs(p - vec3(0.0, 0.0, 0.65)) - vec3(max(extent.xy - 0.42, vec2(0.1)), 0.22);
-    float backDistance = length(max(back, vec3(0.0))) + min(max(back.x, max(back.y, back.z)), 0.0) - 0.23;
-    float backing = 1.0 - smoothstep(-0.18, 0.48, backDistance + (0.52 - billow) * 0.65);
-    float arrival = 0.32 + 0.36 * noise(vec3(p.xy * 0.55, 5.0) + offset);
-    float backingMass = 1.0 - smoothstep(0.035, 0.18, progress - arrival);
-    return max(density, backing * backingMass * 0.90);
+    return density;
 }
 vec4 renderSmoke(vec2 point, vec4 windowRect) {
     vec2 center = windowRect.xy + windowRect.zw * 0.5;
-    float unit = clamp(windowRect.w / 3.0, 100.0, 180.0);
+    float unit = clamp(min(windowRect.z, windowRect.w) / 4.0, 56.0, 95.0);
     vec2 xy = (point - center) / unit;
     vec3 offset = vec3(mod(seed, 97.0), mod(seed * 0.37, 89.0), mod(seed * 0.13, 79.0));
     float t = progress * 2.4;
-    float expansion = 1.0 + smoothstep(0.35, 1.0, progress) * 0.12;
+    float expansion = 1.0 + smoothstep(0.35, 1.0, progress) * 0.05;
     vec3 extent = vec3(windowRect.zw / (unit * 2.0), 0.75);
     prepareBillows(extent, offset, t);
     float arrival = 0.32 + 0.36 * noise(vec3(xy * 0.55, 5.0) + offset);
@@ -104,20 +99,11 @@ vec4 renderSmoke(vec2 point, vec4 windowRect) {
         }
     }
     float alpha = 1.0 - transmittance;
-    vec2 outside = max(abs(point - center) - windowRect.zw * 0.5, vec2(0));
-    // Only force full coverage where the window's visibility changes.
-    float cover = (1.0 - smoothstep(0.025, 0.10, abs(phase)))
-                * (1.0 - smoothstep(0.0, 20.0, length(outside))) * envelope;
-    float coveredAlpha = max(alpha, cover);
-    vec3 color = radiance / max(alpha, 0.001);
-    return vec4(color * coveredAlpha, coveredAlpha);
+    float strength = mix(0.68, 0.44, smoothstep(300000.0, 1600000.0, windowRect.z * windowRect.w));
+    return vec4(radiance * strength, alpha * strength);
 }
 
 float windowVisibility(vec2 point, vec4 windowRect) {
-    float unit = clamp(windowRect.w / 3.0, 100.0, 180.0);
-    vec2 xy = (point - windowRect.xy - windowRect.zw * 0.5) / unit;
-    vec3 offset = vec3(mod(seed, 97.0), mod(seed * 0.37, 89.0), mod(seed * 0.13, 79.0));
-    float arrival = 0.32 + 0.36 * noise(vec3(xy * 0.55, 5.0) + offset);
-    float passed = smoothstep(-0.015, 0.015, progress - arrival);
+    float passed = smoothstep(0.12, 0.64, progress);
     return incoming != 0 ? passed : 1.0 - passed;
 }

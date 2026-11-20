@@ -2,8 +2,8 @@
 
 Volumetric mist reveals and conceals Hyprland windows. Overlapping billows drift,
 expand, and disperse independently. Light passing through the smoke creates
-shadowed interiors and small theme-colored highlights. Window visibility changes
-beneath dense mist. Opening lasts 0.9 seconds; closing and workspace transitions
+shadowed interiors and small theme-colored highlights. Windows fade beneath eight separated cloud pockets, with softer smoke on large
+windows. Opening lasts 0.5 seconds; closing and workspace transitions
 follow their native animation progress. Dragging leaves lighter wisps.
 
 Targets Hyprland **0.56.2 / efb50993780079460b0cbed1363e2166a2de1d9f**.

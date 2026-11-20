@@ -85,8 +85,9 @@ ShellRoot {
                 property real progress: 0.48
                 property bool incoming: true
                 property int seed: 1
-                readonly property real windowWidth: shape.currentIndex === 1 ? Math.min(width * 0.35, height * 0.42) : width * (shape.currentIndex === 0 ? 0.58 : 0.36)
-                readonly property real windowHeight: height * (shape.currentIndex === 1 ? 0.58 : shape.currentIndex === 2 ? 0.40 : 0.54)
+                readonly property real renderScale: shape.currentIndex === 3 ? 2 : 1
+                readonly property real windowWidth: shape.currentIndex === 1 ? Math.min(width * 0.35, height * 0.42) : width * (shape.currentIndex === 3 ? 0.90 : shape.currentIndex === 0 ? 0.58 : 0.36)
+                readonly property real windowHeight: height * (shape.currentIndex === 1 ? 0.58 : shape.currentIndex === 2 ? 0.40 : shape.currentIndex === 3 ? 0.86 : 0.54)
                 readonly property real windowX: (width - windowWidth) / 2
                 readonly property real windowY: (height - windowHeight) / 2
                 function arrange(nextSeed: int): void { seed = nextSeed; }
@@ -142,8 +143,8 @@ ShellRoot {
                     property real progress: stage.progress
                     property real seed: stage.seed
                     property real incoming: stage.incoming ? 1 : 0
-                    property vector2d targetSize: Qt.vector2d(stage.width, stage.height)
-                    property vector4d windowRect: Qt.vector4d(stage.windowX, stage.windowY, stage.windowWidth, stage.windowHeight)
+                    property vector2d targetSize: Qt.vector2d(stage.width * stage.renderScale, stage.height * stage.renderScale)
+                    property vector4d windowRect: Qt.vector4d(stage.windowX * stage.renderScale, stage.windowY * stage.renderScale, stage.windowWidth * stage.renderScale, stage.windowHeight * stage.renderScale)
                     property color shadowColor: window.mistColor("shadow", "surfaceContainerHighest")
                     property color accentA: window.mistColor("primary", "primary")
                     property color accentB: window.mistColor("secondary", "secondary")
@@ -158,8 +159,8 @@ ShellRoot {
                     property real progress: stage.progress
                     property real seed: stage.seed
                     property real incoming: stage.incoming ? 1 : 0
-                    property vector2d targetSize: Qt.vector2d(stage.width, stage.height)
-                    property vector4d windowRect: Qt.vector4d(stage.windowX, stage.windowY, stage.windowWidth, stage.windowHeight)
+                    property vector2d targetSize: Qt.vector2d(stage.width * stage.renderScale, stage.height * stage.renderScale)
+                    property vector4d windowRect: Qt.vector4d(stage.windowX * stage.renderScale, stage.windowY * stage.renderScale, stage.windowWidth * stage.renderScale, stage.windowHeight * stage.renderScale)
                     property color shadowColor: fogVolume.shadowColor
                     property color accentA: fogVolume.accentA
                     property color accentB: fogVolume.accentB
@@ -173,7 +174,7 @@ ShellRoot {
                     property: "progress"
                     from: 0
                     to: 1
-                    duration: slow.checked ? 2700 : 900
+                    duration: slow.checked ? 1500 : 500
                     onStopped: window.measureFrames = false
                 }
                 Component.onCompleted: { randomize(); console.log("MIST-PREVIEW-READY"); }
@@ -190,8 +191,8 @@ ShellRoot {
                     onClicked: { reveal.stop(); stage.incoming = false; reveal.from = 0; reveal.to = 1; reveal.start(); }
                 }
                 Button { text: "New arrangement"; onClicked: { reveal.stop(); stage.randomize(); } }
-                ComboBox { id: shape; model: ["Wide", "Tall", "Compact"] }
-                CheckBox { id: slow; text: "Slow motion"; checked: true }
+                ComboBox { id: shape; model: ["Wide", "Tall", "Compact", "Large"] }
+                CheckBox { id: slow; text: "Slow motion"; checked: false }
                 Slider {
                     Layout.fillWidth: true
                     from: 0
@@ -201,7 +202,7 @@ ShellRoot {
                 }
             }
             Text {
-                text: "Preview only. Your desktop smoke effect remains off."
+                text: "Preview only. This window does not change desktop effects."
                 color: window.tone("onSurfaceVariant", systemPalette.text)
                 font.pixelSize: 12
             }

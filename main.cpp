@@ -175,9 +175,9 @@ void sampleWindows() {
             c.progress=alpha->isBeingAnimated() ? (c.incoming ? alpha->value() : 1.0-alpha->value())
                                                : workspace->m_renderOffset->getCurveValue();
             c.progress=std::clamp(c.progress,0.0,1.0);
-        } else if(shown && s.opened>=0 && now-s.opened<.9) {
+        } else if(shown && s.opened>=0 && now-s.opened<.5) {
             c.active=true; c.incoming=true;
-            c.progress=(now-s.opened)/.9; c.elapsed=now-s.opened;
+            c.progress=(now-s.opened)/.5; c.elapsed=now-s.opened;
         } else if(shown && s.visible && !inserted && now-s.time>.001 && now-s.time<.1) {
             particles.trail(b,{b.x-s.box.x,b.y-s.box.y},now-s.time,now,.25,s.credit);
         }
@@ -216,7 +216,7 @@ void updateClosing() {
         c.cloud.elapsed=now-c.born; c.cloud.stamp=now;
         auto target=f->framebuffer();
         clouds.mask(c.original,c.masked,monitorBox(m),c.cloud);
-        // Native fade alpha would expose the disappearing window before smoke covers it.
+        // The plugin owns fadeout visibility; the native snapshot must not render twice.
         clouds.blank(target);
     }
 }
@@ -316,7 +316,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE h) {
     HyprlandAPI::addLuaFunction(h,"hyprmist","tracked_windows",trackedWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","closing_windows",closingWindows);
     HyprlandAPI::addLuaFunction(h,"hyprmist","verify_field",verifyField);
-    return {"hyprmist","Volumetric mist with theme-lit billows","nehrbash","0.4.0"};
+    return {"hyprmist","Volumetric mist with theme-lit billows","nehrbash","0.4.1"};
 }
 APICALL EXPORT void PLUGIN_EXIT() {
     listeners.clear();
